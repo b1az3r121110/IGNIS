@@ -1,16 +1,18 @@
 
 import React from 'react';
-import { RenderDimension } from '../../types';
+import { RenderDimension, PhysicsEngineType } from '../../types';
 
 interface ToolbarProps {
   dimension: RenderDimension;
   setDimension: (d: RenderDimension) => void;
   isSimulating: boolean;
   setIsSimulating: (s: boolean) => void;
+  physicsEngine: PhysicsEngineType;
+  setPhysicsEngine: (p: PhysicsEngineType) => void;
   wPosition: number;
   setWPosition: (w: number) => void;
-  wFov: number; // New Prop
-  setWFov: (f: number) => void; // New Prop
+  wFov: number;
+  setWFov: (f: number) => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -20,7 +22,7 @@ interface ToolbarProps {
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({ 
-  dimension, setDimension, isSimulating, setIsSimulating, wPosition, setWPosition, wFov, setWFov,
+  dimension, setDimension, isSimulating, setIsSimulating, physicsEngine, setPhysicsEngine, wPosition, setWPosition, wFov, setWFov,
   onUndo, onRedo, canUndo, canRedo, showDebug, setShowDebug 
 }) => {
   return (
@@ -41,6 +43,23 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <i className="fas fa-step-forward text-[10px]"></i>
              </button>
         )}
+      </div>
+
+      <div className="h-8 w-px bg-white/10"></div>
+
+      {/* Physics Engine Switcher */}
+      <div className="flex items-center gap-2 bg-black/40 p-1 rounded-xl border border-white/5 backdrop-blur-xl px-3">
+          <span className="text-[8px] font-black text-gray-500 uppercase">Physics</span>
+          <select 
+            value={physicsEngine}
+            onChange={(e) => setPhysicsEngine(e.target.value as PhysicsEngineType)}
+            className="bg-transparent text-[9px] font-bold text-[#ff9d5c] uppercase outline-none cursor-pointer"
+            disabled={isSimulating}
+          >
+              <option value={PhysicsEngineType.FLINT}>Flint v3beta</option>
+              <option value={PhysicsEngineType.PHYSX}>PhysX (Bridge)</option>
+              <option value={PhysicsEngineType.WASM}>Custom WASM (Sim)</option>
+          </select>
       </div>
 
       <div className="h-8 w-px bg-white/10"></div>

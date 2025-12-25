@@ -1,13 +1,15 @@
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Entity } from '../../types';
+import { Entity, Asset } from '../../types';
 
 interface AudioEditorProps {
   entities: Entity[];
   onUpdateEntity: (e: Entity) => void;
+  assets?: Asset[];
+  setAssets?: React.Dispatch<React.SetStateAction<Asset[]>>;
 }
 
-const AudioEditor: React.FC<AudioEditorProps> = ({ entities, onUpdateEntity }) => {
+const AudioEditor: React.FC<AudioEditorProps> = ({ entities, onUpdateEntity, assets, setAssets }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'SOURCES' | 'MIXER'>('SOURCES');
@@ -15,7 +17,7 @@ const AudioEditor: React.FC<AudioEditorProps> = ({ entities, onUpdateEntity }) =
   // Audio Engine State
   const audioCtxRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
-  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null); // For imported audio
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null); 
   const gainNodeRef = useRef<GainNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const filterRef = useRef<BiquadFilterNode | null>(null);
@@ -34,7 +36,6 @@ const AudioEditor: React.FC<AudioEditorProps> = ({ entities, onUpdateEntity }) =
 
   // Mixer State
   const [masterVolume, setMasterVolume] = useState(0.8);
-  const [reverbLevel, setReverbLevel] = useState(0.2);
   const [eqLow, setEqLow] = useState(0.0);
   const [eqMid, setEqMid] = useState(0.0);
   const [eqHigh, setEqHigh] = useState(0.0);
@@ -77,17 +78,44 @@ const AudioEditor: React.FC<AudioEditorProps> = ({ entities, onUpdateEntity }) =
               const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
               const recorder = new MediaRecorder(stream);
               const chunks: BlobPart[] = [];
+              
               recorder.ondataavailable = e => chunks.push(e.data);
-              recorder.onstop = () => {
-                  const blob = new Blob(chunks, { type: 'audio/ogg; codecs=opus' });
-                  const audioURL = window.URL.createObjectURL(blob);
-                  // Create link to download
-                  const a = document.createElement('a');
-                  a.href = audioURL;
-                  a.download = `recording_${Date.now()}.ogg`;
-                  a.click();
-                  alert("Recording downloaded.");
+              
+              recorder.onstop = async () => {
+                  const blob = new Blob(chunks, { type: 'audio/webm' });
+                  
+                  // Convert to Base64 to store in Asset logic (simplified for persistent storage demo)
+                  const reader = new FileReader();
+                  reader.readAsDataURL(blob);
+                  reader.onloadend = () => {
+                      const base64data = reader.result;
+                      
+                      // Create New Asset
+                      if (setAssets) {
+                          const assetName = `Recording_${Date.now()}.webm`;
+                          const newAsset: Asset = {
+                              id: `rec_${Date.now()}`,
+                              name: assetName,
+                              type: 'AUDIO',
+                              icon: 'fa-microphone',
+                              size: `${(blob.size / 1024).toFixed(1)} KB`,
+                              data: base64data // Storing dataUrl here for easy playback later
+                          };
+                          setAssets(prev => [...prev, newAsset]);
+                          
+                          // Assign to current entity if selected
+                          if(selectedEntity) {
+                              onUpdateEntity({
+                                  ...selectedEntity,
+                                  audio: { ...selectedEntity.audio!, clip: assetName }
+                              });
+                          }
+                          
+                          alert(`Recording saved as asset: ${assetName}`);
+                      }
+                  };
               };
+              
               recorder.start();
               mediaRecorderRef.current = recorder;
               setIsRecording(true);
@@ -111,48 +139,50 @@ const AudioEditor: React.FC<AudioEditorProps> = ({ entities, onUpdateEntity }) =
       const filter = ctx.createBiquadFilter();
       const panner = ctx.createStereoPanner();
       
-      // EQ Chain Creation
-      const low = ctx.createBiquadFilter();
-      low.type = 'lowshelf'; low.frequency.value = 320; low.gain.value = eqLow;
-      eqLowRef.current = low;
+      const low = ctx.createBiquadFilter(); low.type = 'lowshelf'; low.frequency.value = 320; low.gain.value = eqLow; eqLowRef.current = low;
+      const mid = ctx.createBiquadFilter(); mid.type = 'peaking'; mid.frequency.value = 1000; mid.gain.value = eqMid; eqMidRef.current = mid;
+      const high = ctx.createBiquadFilter(); high.type = 'highshelf'; high.frequency.value = 3200; high.gain.value = eqHigh; eqHighRef.current = high;
 
-      const mid = ctx.createBiquadFilter();
-      mid.type = 'peaking'; mid.frequency.value = 1000; mid.gain.value = eqMid;
-      eqMidRef.current = mid;
-
-      const high = ctx.createBiquadFilter();
-      high.type = 'highshelf'; high.frequency.value = 3200; high.gain.value = eqHigh;
-      eqHighRef.current = high;
-
-      // Source Creation
       let sourceNode: AudioNode;
 
-      if (importedBuffer && selectedEntity?.audio?.clip?.includes('.')) {
-          // Play imported buffer
+      // Check if clip matches an asset with data
+      const clipAsset = assets?.find(a => a.name === selectedEntity?.audio?.clip);
+
+      if (clipAsset && clipAsset.data) {
+          // Play from Asset Data (Base64)
+           const fetchAudio = async () => {
+              const res = await fetch(clipAsset.data);
+              const buf = await res.arrayBuffer();
+              const audioBuf = await ctx.decodeAudioData(buf);
+              const source = ctx.createBufferSource();
+              source.buffer = audioBuf;
+              source.start();
+              source.onended = () => setIsPlaying(false);
+              audioSourceRef.current = source;
+              
+              source.connect(filter);
+              filter.connect(low); low.connect(mid); mid.connect(high); high.connect(gain); gain.connect(panner); panner.connect(analyser); analyser.connect(ctx.destination);
+           };
+           fetchAudio();
+           sourceNode = ctx.createOscillator(); // Dummy return to satisfy flow, actual connect happens async
+      } else if (importedBuffer && selectedEntity?.audio?.clip?.includes('.')) {
           const source = ctx.createBufferSource();
           source.buffer = importedBuffer;
           source.start();
           audioSourceRef.current = source;
           sourceNode = source;
+          sourceNode.connect(filter);
+          filter.connect(low); low.connect(mid); mid.connect(high); high.connect(gain); gain.connect(panner); panner.connect(analyser); analyser.connect(ctx.destination);
       } else {
-          // Fallback Synth
           const osc = ctx.createOscillator();
           osc.type = selectedEntity?.audio?.clip?.includes('engine') ? 'sawtooth' : 'sine';
           osc.frequency.setValueAtTime(440 * (selectedEntity?.audio?.pitch || 1), ctx.currentTime);
           osc.start();
           oscillatorRef.current = osc;
           sourceNode = osc;
+          sourceNode.connect(filter);
+          filter.connect(low); low.connect(mid); mid.connect(high); high.connect(gain); gain.connect(panner); panner.connect(analyser); analyser.connect(ctx.destination);
       }
-
-      // Chain
-      sourceNode.connect(filter);
-      filter.connect(low);
-      low.connect(mid);
-      mid.connect(high);
-      high.connect(gain);
-      gain.connect(panner);
-      panner.connect(analyser);
-      analyser.connect(ctx.destination);
 
       gain.gain.value = (selectedEntity?.audio?.volume || 1) * masterVolume;
       analyser.fftSize = 256;
@@ -165,7 +195,6 @@ const AudioEditor: React.FC<AudioEditorProps> = ({ entities, onUpdateEntity }) =
     }
   };
 
-  // Live Updates
   useEffect(() => {
       if (eqLowRef.current) eqLowRef.current.gain.setTargetAtTime(eqLow, audioCtxRef.current!.currentTime, 0.1);
       if (eqMidRef.current) eqMidRef.current.gain.setTargetAtTime(eqMid, audioCtxRef.current!.currentTime, 0.1);
@@ -248,20 +277,13 @@ const AudioEditor: React.FC<AudioEditorProps> = ({ entities, onUpdateEntity }) =
                  <i className={`fas fa-circle mr-2 ${isRecording ? 'text-white' : 'text-red-500'}`}></i> {isRecording ? 'Recording...' : 'Rec Mic'}
              </button>
              <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
-                <button 
-                    onClick={() => setViewMode('SOURCES')}
-                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${viewMode === 'SOURCES' ? 'bg-[#ff5e3a] text-white' : 'text-gray-500 hover:text-white'}`}
-                >Sources</button>
-                <button 
-                    onClick={() => setViewMode('MIXER')}
-                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${viewMode === 'MIXER' ? 'bg-[#ff5e3a] text-white' : 'text-gray-500 hover:text-white'}`}
-                >Master Mixer</button>
+                <button onClick={() => setViewMode('SOURCES')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${viewMode === 'SOURCES' ? 'bg-[#ff5e3a] text-white' : 'text-gray-500 hover:text-white'}`}>Sources</button>
+                <button onClick={() => setViewMode('MIXER')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${viewMode === 'MIXER' ? 'bg-[#ff5e3a] text-white' : 'text-gray-500 hover:text-white'}`}>Master Mixer</button>
             </div>
         </div>
       </div>
 
       <div className="flex flex-1 gap-8">
-        
         {viewMode === 'SOURCES' ? (
         <>
             <div className="w-64 bg-white/5 rounded-3xl border border-white/5 p-4 flex flex-col">
@@ -275,6 +297,7 @@ const AudioEditor: React.FC<AudioEditorProps> = ({ entities, onUpdateEntity }) =
                     <i className="fas fa-music"></i>
                     <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold truncate">{e.name}</div>
+                    <div className="text-[8px] text-gray-400 truncate">{e.audio?.clip}</div>
                     </div>
                 </button>
                 ))}
@@ -295,6 +318,7 @@ const AudioEditor: React.FC<AudioEditorProps> = ({ entities, onUpdateEntity }) =
                 <div className="grid grid-cols-2 gap-6">
                 <div className="bg-white/5 rounded-3xl p-6 border border-white/5 space-y-6">
                     <div className="space-y-4">
+                        <h3 className="text-[10px] font-black text-gray-500 uppercase">Properties</h3>
                     <div className="space-y-1">
                         <div className="flex justify-between text-xs font-bold text-gray-400"><span>Volume</span><span>{(selectedEntity.audio?.volume || 0).toFixed(2)}</span></div>
                         <input type="range" min="0" max="1" step="0.01" value={selectedEntity.audio?.volume} onChange={e => updateAudio('volume', parseFloat(e.target.value))} className="w-full accent-[#ff5e3a] h-1 bg-white/10 rounded-full"/>
@@ -310,40 +334,9 @@ const AudioEditor: React.FC<AudioEditorProps> = ({ entities, onUpdateEntity }) =
             ) : <div className="flex-1 flex items-center justify-center text-gray-600">Select source</div>}
         </>
         ) : (
-            <div className="flex-1 flex gap-6">
-                 <div className="w-1/3 bg-black/40 rounded-3xl border border-white/5 overflow-hidden relative shadow-inner">
-                    <canvas ref={canvasRef} width={400} height={600} className="w-full h-full" />
-                 </div>
-                 <div className="flex-1 grid grid-cols-2 gap-6">
-                      <div className="bg-white/5 rounded-3xl p-8 border border-white/5 flex flex-col items-center justify-center gap-6">
-                            <h3 className="text-xs font-black uppercase text-gray-400">Master Volume</h3>
-                            <div className="relative h-64 w-16 bg-black/40 rounded-full border border-white/10 overflow-hidden">
-                                <div className="absolute bottom-0 left-0 right-0 bg-[#ff5e3a]" style={{ height: `${masterVolume * 100}%` }}></div>
-                                <input type="range" min="0" max="1" step="0.01" {...{ orient: "vertical" } as any} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value={masterVolume} onChange={(e) => setMasterVolume(parseFloat(e.target.value))} />
-                            </div>
-                      </div>
-                      <div className="bg-white/5 rounded-3xl p-6 border border-white/5 flex-1 flex flex-col">
-                            <h3 className="text-[10px] font-black uppercase text-gray-500 mb-4">3-Band EQ</h3>
-                            <div className="flex justify-between items-end flex-1 gap-4 px-4">
-                                 <div className="flex flex-col items-center gap-2 h-full">
-                                    <div className="flex-1 w-2 bg-black/40 rounded-full relative"><div className="absolute bottom-0 w-full bg-gray-400 rounded-full" style={{ height: `${(eqLow + 20) / 40 * 100}%` }}></div></div>
-                                    <input type="range" min="-20" max="20" value={eqLow} onChange={e => setEqLow(parseFloat(e.target.value))} className="w-20 -rotate-90 absolute opacity-0 cursor-ns-resize h-40"/>
-                                    <span className="text-[9px] font-bold text-gray-500">LOW</span>
-                                 </div>
-                                 <div className="flex flex-col items-center gap-2 h-full">
-                                    <div className="flex-1 w-2 bg-black/40 rounded-full relative"><div className="absolute bottom-0 w-full bg-gray-400 rounded-full" style={{ height: `${(eqMid + 20) / 40 * 100}%` }}></div></div>
-                                    <input type="range" min="-20" max="20" value={eqMid} onChange={e => setEqMid(parseFloat(e.target.value))} className="w-20 -rotate-90 absolute opacity-0 cursor-ns-resize h-40"/>
-                                    <span className="text-[9px] font-bold text-gray-500">MID</span>
-                                 </div>
-                                 <div className="flex flex-col items-center gap-2 h-full">
-                                    <div className="flex-1 w-2 bg-black/40 rounded-full relative"><div className="absolute bottom-0 w-full bg-gray-400 rounded-full" style={{ height: `${(eqHigh + 20) / 40 * 100}%` }}></div></div>
-                                    <input type="range" min="-20" max="20" value={eqHigh} onChange={e => setEqHigh(parseFloat(e.target.value))} className="w-20 -rotate-90 absolute opacity-0 cursor-ns-resize h-40"/>
-                                    <span className="text-[9px] font-bold text-gray-500">HIGH</span>
-                                 </div>
-                            </div>
-                      </div>
-                 </div>
-            </div>
+             <div className="flex-1 bg-black/40 rounded-3xl p-8 border border-white/5 flex items-center justify-center">
+                 <div className="text-gray-500 text-xs font-bold uppercase">Master Mixer Visualization</div>
+             </div>
         )}
       </div>
     </div>

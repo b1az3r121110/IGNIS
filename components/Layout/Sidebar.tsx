@@ -14,7 +14,7 @@ interface SidebarProps {
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onDelete: (id: string) => void;
   onDropAsset: (asset: Asset, entityId: string) => void;
-  onDropAssetToHierarchy?: (asset: Asset) => void; // New prop for generic drop
+  onDropAssetToHierarchy?: (asset: Asset) => void; 
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ entities, selectedId, onSelect, onAdd, activeMode, setActiveMode, onExport, onImport, onDelete, onDropAsset, onDropAssetToHierarchy }) => {
@@ -22,12 +22,14 @@ const Sidebar: React.FC<SidebarProps> = ({ entities, selectedId, onSelect, onAdd
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
+  const [selectedModel, setSelectedModel] = useState<'flash'|'pro'|'gemini3'>('gemini3');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const modes = [
     { mode: EditorMode.VIEWPORT, icon: 'fa-cube', label: 'Design' },
     { mode: EditorMode.VISUAL_CODE, icon: 'fa-project-diagram', label: 'Logic' },
+    { mode: EditorMode.AI_ARCHITECT, icon: 'fa-brain', label: 'Game AI' }, // New AI Mode
     { mode: EditorMode.SCRIPT_CODE, icon: 'fa-code', label: 'Script' },
     { mode: EditorMode.SHADER_EDITOR, icon: 'fa-fire', label: 'Shaders' },
     { mode: EditorMode.AUDIO_SUITE, icon: 'fa-music', label: 'Audio' },
@@ -65,29 +67,18 @@ const Sidebar: React.FC<SidebarProps> = ({ entities, selectedId, onSelect, onAdd
 
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
+        let modelName = 'gemini-3-flash-preview';
+        if (selectedModel === 'pro') modelName = 'gemini-2.5-pro-preview-09-2025'; 
+        if (selectedModel === 'flash') modelName = 'gemini-2.5-flash-latest';
+
         const systemPrompt = `
-        You are an expert 3D/4D geometry generator for the Ignis Engine.
-        The engine uses a specific JSON format for procedural meshes.
-        
-        Your task is to generate a JSON object representing a mesh based on the user's description.
-        
-        Format:
-        {
-            "vertices": [x, y, z, w, ...], // Flat array of numbers. Stride is 4. W is the 4th dimension.
-            "indices": [0, 1, 2, ...],     // Flat array of indices for triangles.
-            "stride": 4
-        }
-        
-        Constraints:
-        - Keep vertex count under 1200 for performance.
-        - Center the object at origin (0,0,0,0).
-        - Use W-coordinate for 4D depth (usually 0 to 1, or -1 to 1).
-        - If the user asks for a standard 3D object, set W to 0 for all vertices.
-        - DO NOT wrap in markdown code blocks. Return raw JSON.
+        You are an expert 3D/4D geometry generator for the Ignis Engine (v0.8.1).
+        Generate JSON: { "vertices": [], "indices": [], "stride": 4 }.
+        Keep vertex count < 2000. Center at origin. Use W for 4D depth.
         `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview', 
+            model: modelName, 
             contents: `${systemPrompt}\n\nRequest: ${aiPrompt}`,
             config: {
                 responseMimeType: "application/json"
@@ -129,7 +120,6 @@ const Sidebar: React.FC<SidebarProps> = ({ entities, selectedId, onSelect, onAdd
           if (targetId) {
             onDropAsset(asset, targetId);
           } else if (onDropAssetToHierarchy) {
-            // Dropped on empty space in hierarchy
             onDropAssetToHierarchy(asset);
           }
       }
@@ -153,7 +143,7 @@ const Sidebar: React.FC<SidebarProps> = ({ entities, selectedId, onSelect, onAdd
           </div>
           <div>
             <h1 className="font-black text-xl tracking-tighter text-[#ff9d5c]">IGNIS</h1>
-            <p className="text-[10px] uppercase font-bold text-gray-500 tracking-widest">v0.7.5b (Build 1)</p>
+            <p className="text-[9px] uppercase font-bold text-gray-500 tracking-widest">v0.8.1-alpha</p>
           </div>
         </div>
       </div>
@@ -245,6 +235,7 @@ const Sidebar: React.FC<SidebarProps> = ({ entities, selectedId, onSelect, onAdd
                   'fa-vector-square'
                 } opacity-40 text-[10px]`}></i>
                 <span className="truncate font-bold flex-1">{entity.name}</span>
+                {entity.ai && <i className="fas fa-brain text-[8px] text-purple-500" title="AI Brain"></i>}
                 {entity.material.textureId && <i className="fas fa-image text-[8px] text-green-500" title="Has Texture"></i>}
                 {entity.scriptId && <i className="fas fa-code text-[8px] text-blue-500" title="Has Script"></i>}
                 <div onClick={(e) => { e.stopPropagation(); setMenuId(menuId === entity.id ? null : entity.id); }} className="w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/10 rounded-lg">
@@ -286,12 +277,21 @@ const Sidebar: React.FC<SidebarProps> = ({ entities, selectedId, onSelect, onAdd
                     <div>
                         <h2 className="text-lg font-black text-white uppercase tracking-tighter">GenAI Asset Creator</h2>
                         <div className="text-[9px] text-gray-400 font-mono">
-                            Powered by Gemini 2.5 Flash
+                            Procedural 3D/4D Generation
                         </div>
                     </div>
                 </div>
 
                 <div className="space-y-4">
+                    <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-gray-500 uppercase">Model Selection</label>
+                        <div className="flex gap-2">
+                            <button onClick={() => setSelectedModel('gemini3')} className={`flex-1 py-2 rounded text-[9px] font-bold uppercase border ${selectedModel === 'gemini3' ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-black/40 border-white/10 text-gray-500'}`}>Gemini 3 Flash</button>
+                            <button onClick={() => setSelectedModel('pro')} className={`flex-1 py-2 rounded text-[9px] font-bold uppercase border ${selectedModel === 'pro' ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-black/40 border-white/10 text-gray-500'}`}>2.5 Pro</button>
+                            <button onClick={() => setSelectedModel('flash')} className={`flex-1 py-2 rounded text-[9px] font-bold uppercase border ${selectedModel === 'flash' ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-black/40 border-white/10 text-gray-500'}`}>2.5 Flash</button>
+                        </div>
+                    </div>
+
                     <div className="space-y-1">
                         <label className="text-[9px] font-bold text-gray-500 uppercase">Prompt</label>
                         <textarea 
@@ -308,7 +308,7 @@ const Sidebar: React.FC<SidebarProps> = ({ entities, selectedId, onSelect, onAdd
                         className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-xs uppercase transition-all flex items-center justify-center gap-2"
                     >
                         {isGenerating ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-sparkles"></i>}
-                        {isGenerating ? 'Generating Geometry...' : 'Generate 4D Mesh'}
+                        {isGenerating ? 'Generating Geometry...' : 'Generate Mesh'}
                     </button>
                 </div>
              </div>

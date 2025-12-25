@@ -12,7 +12,7 @@ interface MainMenuProps {
 
 const MainMenu: React.FC<MainMenuProps> = ({ onStart, onLoadLevel, levels, onImport, onOpenPlugins }) => {
   return (
-    <div className="w-screen h-screen flex items-center justify-center bg-[#0f0a0a] relative overflow-hidden">
+    <div className="w-full h-full flex items-center justify-center bg-[#0f0a0a] relative overflow-hidden select-none">
       {/* Background Layers */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#1a1010_0%,#000000_100%)]"></div>
       <div className="absolute inset-0 firewatch-gradient opacity-10 blur-[100px] animate-pulse"></div>
@@ -29,7 +29,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStart, onLoadLevel, levels, onImp
           </div>
           <h1 className="text-9xl font-black tracking-tighter text-white leading-none mix-blend-overlay">IGNIS</h1>
           <h1 className="text-9xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-white/10 leading-none absolute top-0 left-0 w-full top-[6.5rem]">IGNIS</h1>
-          <p className="text-2xl font-black text-[#ff9d5c] uppercase tracking-[0.5em] mt-4 opacity-80">v0.7.5b Build 1</p>
+          <p className="text-2xl font-black text-[#ff9d5c] uppercase tracking-[0.5em] mt-4 opacity-80">v0.8.1-alpha</p>
         </div>
         
         <div className="flex gap-12 justify-center items-start">
@@ -93,9 +93,9 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStart, onLoadLevel, levels, onImp
         </div>
 
         <div className="mt-16 flex justify-center gap-8 text-[10px] font-bold uppercase tracking-widest text-gray-500">
-          <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> v0.7.5b (Build 1)</span>
-          <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Flint V3 Active</span>
-          <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div> AI Ready</span>
+          <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> v0.8.1-alpha</span>
+          <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Flint V3beta</span>
+          <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div> Native Desktop</span>
         </div>
       </div>
     </div>

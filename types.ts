@@ -7,6 +7,7 @@ export enum EditorMode {
   ASSET_BROWSER = 'ASSET_BROWSER',
   ASSET_CREATOR = 'ASSET_CREATOR',
   AUDIO_SUITE = 'AUDIO_SUITE',
+  AI_ARCHITECT = 'AI_ARCHITECT', // New Mode
   DOCS = 'DOCS',
   EXTENSIONS = 'EXTENSIONS',
   MAIN_MENU = 'MAIN_MENU'
@@ -16,6 +17,12 @@ export enum RenderDimension {
   D2 = '2D',
   D3 = '3D',
   D4 = '4D'
+}
+
+export enum PhysicsEngineType {
+  FLINT = 'FLINT_V3_BETA',
+  PHYSX = 'PHYSX_BRIDGE',
+  WASM = 'CUSTOM_WASM'
 }
 
 export interface VirtualFile {
@@ -35,10 +42,10 @@ export interface LevelData {
 export interface Asset {
   id: string;
   name: string;
-  type: 'MESH' | 'TEXTURE' | 'SCRIPT' | 'SHADER' | 'AUDIO' | 'SCENE' | 'LEVEL';
+  type: 'MESH' | 'TEXTURE' | 'SCRIPT' | 'SHADER' | 'AUDIO' | 'SCENE' | 'LEVEL' | 'AI_BRAIN';
   icon: string;
   size: string;
-  data?: any; // For storing raw content or blob URLs
+  data?: any; 
 }
 
 export interface Connection {
@@ -57,7 +64,7 @@ export interface NodeData {
   pos: { x: number, y: number };
   color: string;
   pins: { input: string[], output: string[] };
-  inputs?: Record<string, any>; // Store values for input fields (numbers, vectors)
+  inputs?: Record<string, any>;
 }
 
 export interface GraphState {
@@ -98,61 +105,71 @@ export interface ParticleConfig {
   colorStart: string;
   colorEnd: string;
   spread: [number, number, number];
+  turbulence: number; 
+  drag: number;       
   
   // --- 4D Particle Props ---
-  wSpread: number;      // How much they spread in 4th dimension
-  wVelocity: number;    // Speed in W direction
-  hyperGravity: number; // Gravity in W direction
+  wSpread: number;      
+  wVelocity: number;    
+  hyperGravity: number; 
+}
+
+export interface Constraint {
+  targetEntityId: string;
+  type: 'DISTANCE' | 'HINGE' | 'FIXED';
+  distance?: number;
+  stiffness?: number; // 0-1
 }
 
 export interface PhysicsProps {
-  type: 'RIGID' | 'SOFT' | 'AERO' | 'FLUID' | 'VEHICLE' | 'QUANTUM' | 'NONE';
+  type: 'RIGID' | 'SOFT' | 'AERO' | 'FLUID' | 'VEHICLE' | 'QUANTUM' | 'RAGDOLL' | 'NONE';
   
-  // --- Legacy (Classic Engine Options) ---
+  // --- Basic ---
   mass: number;
   friction: number;
-  restitution: number; // Bounciness
+  restitution: number; 
   angularDamping: number;
   linearDamping: number;
   gravityScale: number;
   isTrigger: boolean;
   
-  // --- V1.5 Standard ---
-  collisionDetection: 'DISCRETE' | 'CONTINUOUS' | 'SPECULATIVE';
-  customEngine: 'FLINT' | 'PHYSX_BRIDGE' | 'NATIVE_C';
-
-  // --- V2.0 Fluids & Aero ---
-  liftCoefficient?: number;
-  dragCoefficient?: number;
-  viscosity?: number;
-  buoyancy?: number;
-  surfaceTension?: number;
-  fluidDensity?: number;
-
-  // --- V2.6 Commercial (Thermodynamics & Electromagnetism) ---
-  magnetism?: number; // Tesla
-  electrostaticCharge?: number; // Coulombs
-  temperature?: number; // Celsius
-  thermalConductivity?: number;
-  thermalExpansion?: number;
-  meltingPoint?: number;
-
-  // --- V2.6.1 Advanced Material Physics ---
+  // --- Flint v3beta Extensions ---
   staticFriction?: number;
   dynamicFriction?: number;
-  elasticity?: number; // Young's Modulus
-  plasticity?: number; // Deformation retention
-  fractureThreshold?: number; // Force needed to break
-  porosity?: number; // For fluid absorption
-  roughnessMap?: number; // Micro-collision
+  bouncinessThreshold?: number; // Velocity threshold for bounce
+  sleepThreshold?: number;      // Energy threshold for sleep
+  
+  // --- Advanced Config ---
+  collisionDetection: 'DISCRETE' | 'CONTINUOUS' | 'SPECULATIVE';
+  
+  // --- Aerodynamics ---
+  liftCoefficient?: number; 
+  dragCoefficient?: number; 
+  wingArea?: number;
+
+  // --- Fluid Dynamics ---
+  viscosity?: number;
+  buoyancy?: number;
+  fluidDensity?: number;
+
+  // --- Ragdoll / Constraints ---
+  constraints?: Constraint[];
+
+  // --- Commercial ---
+  magnetism?: number; 
+  temperature?: number; 
+  thermalConductivity?: number;
+
+  // --- Materials ---
+  elasticity?: number; 
+  fractureThreshold?: number; 
   
   // --- 4D Physics ---
-  wMass?: number; // Inertia in W dimension
-  hyperFriction?: number; // Friction in W
+  wMass?: number;
   
   // --- Quantum ---
   quantumState?: 'SUPERPOSITION' | 'ENTANGLED' | 'COLLAPSED';
-  probabilityCloud?: number; // 0-1
+  probabilityCloud?: number; 
 }
 
 export interface PlayerControllerProps {
@@ -172,10 +189,16 @@ export interface AudioProps {
   raytraceOcclusion: boolean;
   loop: boolean;
   dopplerLevel?: number;
-  
-  // --- 4D Audio ---
-  is4DSpatial?: boolean; // Attenuate based on W-distance
-  hyperDopplerScale?: number; // Frequency shift based on W-velocity
+  is4DSpatial?: boolean; 
+  hyperDopplerScale?: number; 
+}
+
+export interface AIBrainProps {
+    enabled: boolean;
+    treeData?: GraphState; // Behavior Tree Graph
+    perceptionRange: number;
+    fov: number;
+    faction: 'FRIENDLY' | 'NEUTRAL' | 'HOSTILE';
 }
 
 export interface Entity {
@@ -192,17 +215,12 @@ export interface Entity {
   physics: PhysicsProps;
   controller: PlayerControllerProps;
   audio?: AudioProps;
+  ai?: AIBrainProps; // New AI Component
   velocity?: [number, number, number, number?];
-  scriptId?: string; // ID of the assigned script asset
-  
-  // --- Level Management ---
-  isPortal?: boolean;      // If true, hitting this loads a level
-  targetLevelId?: string;  // The ID of the level to load
-
-  // --- Particle System ---
+  scriptId?: string; 
+  isPortal?: boolean;      
+  targetLevelId?: string;  
   particleConfig?: ParticleConfig;
-
-  // --- Interaction ---
   interactable?: boolean;
-  interactionText?: string; // e.g., "Press E to Open"
+  interactionText?: string;
 }
