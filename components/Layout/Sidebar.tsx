@@ -153,7 +153,7 @@ const Sidebar: React.FC<SidebarProps> = ({ entities, selectedId, onSelect, onAdd
           </div>
           <div>
             <h1 className="font-black text-xl tracking-tighter text-[#ff9d5c]">IGNIS</h1>
-            <p className="text-[10px] uppercase font-bold text-gray-500 tracking-widest">v2.6.2 Ember</p>
+            <p className="text-[10px] uppercase font-bold text-gray-500 tracking-widest">v0.7.5b (Build 1)</p>
           </div>
         </div>
       </div>
@@ -267,7 +267,7 @@ const Sidebar: React.FC<SidebarProps> = ({ entities, selectedId, onSelect, onAdd
         </div>
 
         <div className="p-4 grid grid-cols-2 gap-2 border-t border-white/5">
-          <button onClick={onExport} className="py-2 bg-white/5 rounded-xl text-[9px] font-black uppercase hover:bg-white/10 transition-all">Export</button>
+          <button onClick={onExport} className="py-2 bg-white/5 rounded-xl text-[9px] font-black uppercase hover:bg-white/10 transition-all text-[#ff5e3a] hover:text-[#ff9d5c]">Build</button>
           <input type="file" onChange={onImport} id="sidebar-import" className="hidden" />
           <label htmlFor="sidebar-import" className="py-2 bg-white/5 rounded-xl text-[9px] font-black uppercase text-center cursor-pointer hover:bg-white/10 transition-all">Import</label>
         </div>

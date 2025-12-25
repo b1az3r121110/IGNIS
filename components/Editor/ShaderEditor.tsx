@@ -1,5 +1,5 @@
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 
 interface ShaderNode {
@@ -22,6 +22,11 @@ interface ShaderConnection {
     targetIn: string;
 }
 
+interface ShaderGraphState {
+    nodes: ShaderNode[];
+    connections: ShaderConnection[];
+}
+
 const ShaderEditor: React.FC = () => {
   const previewRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -37,9 +42,48 @@ const ShaderEditor: React.FC = () => {
       { id: 'c2', sourceId: 'tex1', sourceOut: 'RGBA', targetId: 'master', targetIn: 'Albedo' }
   ]);
 
+  // --- HISTORY MANAGEMENT ---
+  const [history, setHistory] = useState<ShaderGraphState[]>([{ nodes, connections }]);
+  const [historyIdx, setHistoryIdx] = useState(0);
+
+  const pushHistory = useCallback((newNodes: ShaderNode[], newConns: ShaderConnection[]) => {
+      const nextState = { nodes: [...newNodes], connections: [...newConns] };
+      const newHistory = history.slice(0, historyIdx + 1);
+      newHistory.push(nextState);
+      if (newHistory.length > 50) newHistory.shift();
+      setHistory(newHistory);
+      setHistoryIdx(newHistory.length - 1);
+  }, [history, historyIdx]);
+
+  const undo = useCallback(() => {
+      if (historyIdx > 0) {
+          const prev = history[historyIdx - 1];
+          setNodes(prev.nodes);
+          setConnections(prev.connections);
+          setHistoryIdx(historyIdx - 1);
+      }
+  }, [history, historyIdx]);
+
+  const redo = useCallback(() => {
+      if (historyIdx < history.length - 1) {
+          const next = history[historyIdx + 1];
+          setNodes(next.nodes);
+          setConnections(next.connections);
+          setHistoryIdx(historyIdx + 1);
+      }
+  }, [history, historyIdx]);
+
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+          if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
   // Canvas State
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
 
@@ -50,8 +94,8 @@ const ShaderEditor: React.FC = () => {
   // Connection Drag State
   const [dragConnection, setDragConnection] = useState<{ sourceId: string, sourceOut: string, startPos: {x:number, y:number} } | null>(null);
   
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // Global mouse client pos
-  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 }); // Canvas-relative spawn pos
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); 
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 }); 
   const [menuOpen, setMenuOpen] = useState(false);
   
   // Custom Node Creator State
@@ -62,7 +106,7 @@ const ShaderEditor: React.FC = () => {
   const [customNodeCode, setCustomNodeCode] = useState('void main() {\n  Result = A + B;\n}');
   const [customLibrary, setCustomLibrary] = useState<ShaderNode[]>([]);
 
-  // 3D Preview
+  // 3D Preview (Unchanged)
   useEffect(() => {
     if (!previewRef.current) return;
     const width = previewRef.current.clientWidth;
@@ -105,9 +149,8 @@ const ShaderEditor: React.FC = () => {
   }, []);
 
   // --- MOUSE HANDLERS ---
-
   const handleMouseDown = (e: React.MouseEvent) => {
-      if (e.button === 1 || e.button === 2) { // Middle or Right click to pan
+      if (e.button === 1 || e.button === 2) { 
           e.preventDefault();
           setIsPanning(true);
           setLastMousePos({ x: e.clientX, y: e.clientY });
@@ -126,8 +169,6 @@ const ShaderEditor: React.FC = () => {
 
       if (dragNodeId && containerRef.current) {
           const rect = containerRef.current.getBoundingClientRect();
-          // Calculate new node position in canvas space (accounting for pan)
-          // mousePos relative to container -> subtract pan -> subtract offset
           const relX = (e.clientX - rect.left) - pan.x;
           const relY = (e.clientY - rect.top) - pan.y;
           
@@ -140,6 +181,10 @@ const ShaderEditor: React.FC = () => {
   };
 
   const handleGlobalMouseUp = () => {
+      if (dragNodeId) {
+          // Commit history on drag end
+          pushHistory(nodes, connections);
+      }
       setIsPanning(false);
       setDragNodeId(null);
       setDragConnection(null);
@@ -152,15 +197,13 @@ const ShaderEditor: React.FC = () => {
           window.removeEventListener('mousemove', handleGlobalMouseMove);
           window.removeEventListener('mouseup', handleGlobalMouseUp);
       };
-  }, [isPanning, dragNodeId, lastMousePos, pan, dragOffset]);
+  }, [isPanning, dragNodeId, lastMousePos, pan, dragOffset, nodes, connections, pushHistory]);
 
   // --- ACTIONS ---
-
   const handleContextMenu = (e: React.MouseEvent) => {
       e.preventDefault();
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      // Store position relative to canvas (minus pan) for accurate spawning
       const x = (e.clientX - rect.left) - pan.x;
       const y = (e.clientY - rect.top) - pan.y;
       setContextMenuPos({ x, y });
@@ -173,19 +216,23 @@ const ShaderEditor: React.FC = () => {
           ...def,
           pos: { x: contextMenuPos.x, y: contextMenuPos.y }
       };
-      setNodes([...nodes, newNode]);
+      const newNodes = [...nodes, newNode];
+      setNodes(newNodes);
+      pushHistory(newNodes, connections);
       setMenuOpen(false);
   };
 
   const deleteNode = (id: string) => {
-      setNodes(nodes.filter(n => n.id !== id));
-      setConnections(connections.filter(c => c.sourceId !== id && c.targetId !== id));
+      const newNodes = nodes.filter(n => n.id !== id);
+      const newConns = connections.filter(c => c.sourceId !== id && c.targetId !== id);
+      setNodes(newNodes);
+      setConnections(newConns);
+      pushHistory(newNodes, newConns);
   };
 
   const createCustomNode = () => {
       const inputs = customNodeInputs.split(',').map(s => s.trim()).filter(s => s);
       const outputs = customNodeOutputs.split(',').map(s => s.trim()).filter(s => s);
-      
       const newNodeDef = {
           type: 'Custom',
           title: customNodeName || 'Custom Node',
@@ -194,29 +241,17 @@ const ShaderEditor: React.FC = () => {
           color: 'bg-pink-600',
           customCode: customNodeCode
       };
-      const newLib = [...customLibrary, newNodeDef as any];
-      setCustomLibrary(newLib);
-      
-      // Immediately add instance
+      setCustomLibrary([...customLibrary, newNodeDef as any]);
       addNode(newNodeDef);
-      
       setShowCustomCreator(false);
-      // Reset form
-      setCustomNodeName('');
-      setCustomNodeInputs('');
-      setCustomNodeOutputs('Result');
+      setCustomNodeName(''); setCustomNodeInputs(''); setCustomNodeOutputs('Result');
   };
 
   // --- CONNECTIONS ---
-
   const getNodePinPos = (nodeId: string, pinName: string, type: 'in' | 'out') => {
       const node = nodes.find(n => n.id === nodeId);
       if (!node) return { x: 0, y: 0 };
       const idx = type === 'in' ? node.inputs.indexOf(pinName) : node.outputs.indexOf(pinName);
-      
-      // Calculate absolute position on screen then convert to canvas space?
-      // No, calculate in Canvas Space (pos + offsets)
-      // Node Width approx 208px (w-52). Header 32px. Body padding.
       return {
           x: node.pos.x + (type === 'in' ? 0 : 208),
           y: node.pos.y + 44 + (idx * 24)
@@ -239,21 +274,17 @@ const ShaderEditor: React.FC = () => {
   const handlePinMouseUp = (e: React.MouseEvent, nodeId: string, pin: string, type: 'in') => {
       e.stopPropagation();
       if (dragConnection) {
-          if (dragConnection.sourceId === nodeId) return; // Prevent self-connection
-          
-          // Check if connection already exists
-          const exists = connections.find(c => c.targetId === nodeId && c.targetIn === pin);
-          if (exists) {
-              setConnections(prev => prev.filter(c => c.id !== exists.id)); // Replace existing
-          }
-
-          setConnections(prev => [...prev, {
+          if (dragConnection.sourceId === nodeId) return; 
+          let newConns = connections.filter(c => !(c.targetId === nodeId && c.targetIn === pin)); // Remove existing
+          newConns.push({
               id: `con_${Date.now()}`,
               sourceId: dragConnection.sourceId,
               sourceOut: dragConnection.sourceOut,
               targetId: nodeId,
               targetIn: pin
-          }]);
+          });
+          setConnections(newConns);
+          pushHistory(nodes, newConns);
           setDragConnection(null);
       }
   };
@@ -280,6 +311,12 @@ const ShaderEditor: React.FC = () => {
 
   return (
     <div className="w-full h-full flex bg-[#1a1a1a] relative overflow-hidden">
+      {/* TOOLBAR */}
+      <div className="absolute top-4 left-4 z-50 flex bg-black/40 rounded-xl p-1 border border-white/5 backdrop-blur-md">
+           <button onClick={undo} disabled={historyIdx===0} className={`px-3 py-1 rounded text-[9px] font-black uppercase ${historyIdx===0 ? 'opacity-30' : 'text-[#ff5e3a] hover:bg-white/5'}`}>Undo</button>
+           <button onClick={redo} disabled={historyIdx===history.length-1} className={`px-3 py-1 rounded text-[9px] font-black uppercase ${historyIdx===history.length-1 ? 'opacity-30' : 'text-[#ff5e3a] hover:bg-white/5'}`}>Redo</button>
+      </div>
+
       {/* Node Canvas */}
       <div 
         ref={containerRef}

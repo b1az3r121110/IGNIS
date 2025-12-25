@@ -1,4 +1,4 @@
-#by GEMINI AI
+
 # Ignis Engine & Creator 🔥
 
 ![Ignis Badge](https://img.shields.io/badge/Ignis-Engine_v2.6.2-ff5e3a?style=for-the-badge)
@@ -97,7 +97,7 @@
 
 ---
 
-## 🔮 Future Roadmap (i doubt it)
+## 🔮 Future Roadmap
 
 *   **Multiplayer Networking**: WebSocket integration for real-time collaboration.
 *   **Native Export**: Electron-based wrappers for Windows/Mac builds.
@@ -105,3 +105,4 @@
 
 ---
 
+Made with ❤️ by the Ignis Team.

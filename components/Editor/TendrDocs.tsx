@@ -10,8 +10,12 @@ interface DocItem {
 const TendrDocs: React.FC = () => {
   const [selected, setSelected] = useState<DocItem | null>(null);
 
-  // 50+ New Unique Functions/Nodes
   const library = [
+    // --- PHYSICS V3 ---
+    { category: 'Physics', name: 'add_torque(vec3)', desc: 'Applies rotational force (torque) to a rigid body.' },
+    { category: 'Physics', name: 'get_angular_velocity()', desc: 'Returns the current angular velocity as Vec3.' },
+    { category: 'Physics', name: 'set_angular_damping(float)', desc: 'Sets the resistance to rotation.' },
+    
     // --- QUANTUM PHYSICS ---
     { category: 'Quantum', name: 'q_entangle(A, B)', desc: 'Links state of two entities. If A collapses, B collapses to complement.' },
     { category: 'Quantum', name: 'q_superpose(val1, val2)', desc: 'Creates a superposition. Returns a Schrödinger value.' },
@@ -71,8 +75,8 @@ const TendrDocs: React.FC = () => {
   return (
     <div className="w-full h-full bg-[#120a0a] p-8 overflow-hidden flex flex-col">
        <div className="mb-6">
-           <h1 className="text-4xl font-black text-[#ff9d5c]">Tendra API v2.6.1.a</h1>
-           <p className="text-xs text-gray-500 font-mono">50+ New Functions Added</p>
+           <h1 className="text-4xl font-black text-[#ff9d5c]">Tendra API v0.7.5b (Build 1)</h1>
+           <p className="text-xs text-gray-500 font-mono">60+ New Functions Added (Physics V3)</p>
        </div>
        
        <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-4">

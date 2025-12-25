@@ -10,13 +10,13 @@ interface ViewportProps {
   dimension: RenderDimension;
   isSimulating: boolean;
   wPosition: number;
-  wFov: number; // New Prop for 4D Perspective
-  setEntities: React.Dispatch<React.SetStateAction<Entity[]>>;
+  wFov: number;
+  onEntitiesChange: (entities: Entity[], commit?: boolean) => void;
 }
 
 const GRAVITY = -9.81;
-const PHYSICS_SUBSTEPS = 8; // Flint v2.1 High Stability
-const FLUID_PARTICLE_COUNT = 500; // Particles per fluid object
+const PHYSICS_SUBSTEPS = 8;
+const FLUID_PARTICLE_COUNT = 500;
 
 type Axis = 'X' | 'Y' | 'Z' | 'W' | 'NONE';
 type TransformMode = 'TRANSLATE' | 'SCALE';
@@ -67,7 +67,7 @@ class SpatialHash {
 // Helper for random Range
 const randRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
-const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, isSimulating, wPosition, wFov, setEntities }) => {
+const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, isSimulating, wPosition, wFov, onEntitiesChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -77,19 +77,18 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
   // State Refs
   const meshesRef = useRef<Map<string, THREE.Object3D>>(new Map());
   const velocitiesRef = useRef<Map<string, THREE.Vector4>>(new Map());
-  const fluidParticlesRef = useRef<Map<string, { positions: Float32Array, velocities: Float32Array }>>(new Map());
+  const angularVelocitiesRef = useRef<Map<string, THREE.Vector3>>(new Map()); // New Angular Physics
   
   const emberSystemsRef = useRef<Map<string, {
-      pos: Float32Array; // x,y,z,w
-      vel: Float32Array; // vx,vy,vz,vw
-      life: Float32Array; // maxLife per particle
-      age: Float32Array;  // currentAge
+      pos: Float32Array;
+      vel: Float32Array;
+      life: Float32Array;
+      age: Float32Array;
       config: ParticleConfig;
   }>>(new Map());
 
-  const textureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
   const gizmoGroupRef = useRef<THREE.Group | null>(null);
-  const physicsDebugGroupRef = useRef<THREE.Group | null>(null); // New group for physics wireframes
+  const physicsDebugGroupRef = useRef<THREE.Group | null>(null);
   const spatialHashRef = useRef(new SpatialHash(2.0));
   const mesh4DCacheRef = useRef<Map<string, Float32Array>>(new Map());
 
@@ -215,7 +214,7 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
     gizmoGroup.add(createArrow(0x0000ff, 'z')); // child 3
     gizmoGroup.add(createArrow(0xff00ff, 'w')); // child 4
 
-    // --- PHYSICS ENGINE FLINT V2.1 ---
+    // --- PHYSICS ENGINE FLINT V3.0 (Updated) ---
     const solveFlintV2 = (dt: number, activeBodies: Entity[]) => {
         const subStepDt = dt / PHYSICS_SUBSTEPS;
         const sh = spatialHashRef.current;
@@ -236,6 +235,7 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
                 if (entity.physics.type === 'FLUID') return;
 
                 let vel = velocitiesRef.current.get(entity.id) || new THREE.Vector4(0,0,0,0);
+                let angVel = angularVelocitiesRef.current.get(entity.id) || new THREE.Vector3(0,0,0);
                 
                 // PLAYER CONTROLLER INPUT
                 if (entity.controller && entity.controller.enabled) {
@@ -262,6 +262,7 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
                 }
 
                 if (!entity.isStatic) {
+                    // Linear Dynamics
                     vel.y += GRAVITY * entity.physics.gravityScale * subStepDt;
                     vel.multiplyScalar(1 - (entity.physics.linearDamping * subStepDt));
                     
@@ -270,6 +271,12 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
                     entity.transform.position[2] += vel.z * subStepDt;
                     if(entity.transform.position[3] !== undefined) entity.transform.position[3] += (vel.w || 0) * subStepDt;
 
+                    // Angular Dynamics (Simple Euler integration)
+                    angVel.multiplyScalar(1 - (entity.physics.angularDamping * subStepDt));
+                    entity.transform.rotation[0] += angVel.x * subStepDt;
+                    entity.transform.rotation[1] += angVel.y * subStepDt;
+                    entity.transform.rotation[2] += angVel.z * subStepDt;
+
                     // Simple Ground Collision
                     if (entity.transform.position[1] < 0) {
                         entity.transform.position[1] = 0;
@@ -277,10 +284,18 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
                         // Apply friction
                         vel.x *= (1 - entity.physics.friction);
                         vel.z *= (1 - entity.physics.friction);
+                        
+                        // Fake angular impulse on impact
+                        if(Math.abs(vel.y) > 2) {
+                            angVel.x += (Math.random() - 0.5) * vel.y;
+                            angVel.z += (Math.random() - 0.5) * vel.y;
+                        }
+
                         if(Math.abs(vel.y) < 0.1) vel.y = 0;
                     }
                 }
                 velocitiesRef.current.set(entity.id, vel);
+                angularVelocitiesRef.current.set(entity.id, angVel);
             });
         }
     };
@@ -313,7 +328,6 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
                 sceneRef.current?.remove(obj);
                 if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();
                 meshesRef.current.delete(id);
-                fluidParticlesRef.current.delete(id);
                 emberSystemsRef.current.delete(id);
             }
         });
@@ -374,7 +388,6 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
 
         currentEntities.forEach(ent => {
             let obj = meshesRef.current.get(ent.id);
-            const isFluid = ent.physics.type === 'FLUID';
             const isParticle = ent.meshType === 'PARTICLE_SYSTEM';
             
             if (obj && obj.userData.meshType !== ent.meshType) {
@@ -444,9 +457,7 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
                     const center = ent.transform.position;
                     const c1 = new THREE.Color(config.colorStart);
                     const c2 = new THREE.Color(config.colorEnd);
-                    
-                    // Pre-calculate Hyper-Perspective Factor
-                    const fovScale = currentFov / 45.0; // Base FOV 45
+                    const fovScale = currentFov / 45.0; 
 
                     for (let i = 0; i < config.count; i++) {
                         age[i] += dt;
@@ -468,7 +479,6 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
                         }
                         const w = pos[i*4+3];
                         const wDelta = 4.0 - (w - currentW);
-                        // Enhanced 4D Scaling
                         const scale = currentDim === RenderDimension.D4 
                             ? (wDelta > 0.1 ? (4.0 * fovScale) / wDelta : 0.001) 
                             : 1;
@@ -482,10 +492,11 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
                     obj.position.set(0,0,0); obj.scale.set(1,1,1); obj.rotation.set(0,0,0);
                 }
             } else if (obj) {
+                // Apply Transform
                 obj.position.set(ent.transform.position[0], ent.transform.position[1], ent.transform.position[2]);
+                obj.rotation.set(ent.transform.rotation[0], ent.transform.rotation[1], ent.transform.rotation[2]);
                 obj.scale.set(ent.transform.scale[0], ent.transform.scale[1], ent.transform.scale[2]);
                 
-                // 4D MESH PROJECTION
                 if (currentDim === RenderDimension.D4 && mesh4DCacheRef.current.has(ent.id) && obj instanceof THREE.Mesh) {
                      const raw4D = mesh4DCacheRef.current.get(ent.id)!;
                      const posAttr = obj.geometry.attributes.position;
@@ -494,28 +505,25 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
                      for(let i=0, j=0; i<raw4D.length; i+=4, j+=3) {
                          const x = raw4D[i], y = raw4D[i+1], z = raw4D[i+2], w = raw4D[i+3];
                          const wDelta = 4.0 - (w - currentW);
-                         // Apply Hyper-Perspective
                          const scale = wDelta > 0.1 ? (4.0 * fovScale) / wDelta : 0.001;
                          posAttr.setXYZ(j/3, x * scale, y * scale, z * scale);
                      }
                      posAttr.needsUpdate = true;
                 }
                 
-                // 4D SLICE VISIBILITY
-                if (currentDim === RenderDimension.D4 && !isFluid && !isParticle) {
+                if (currentDim === RenderDimension.D4 && !isParticle) {
                      const wObj = ent.transform.position[3] || 0;
                      const wDist = Math.abs(wObj - currentW);
-                     // Gaussian falloff for slicing based on FOV tightness
                      const opacity = Math.exp(-Math.pow(wDist, 2) * (200 / currentFov)); 
                      
                      const mat = (obj as THREE.Mesh).material as THREE.MeshStandardMaterial;
                      if(mat) { 
                          mat.transparent = true; 
                          mat.opacity = opacity; 
-                         mat.depthWrite = opacity > 0.8; // Only write depth if mostly solid
+                         mat.depthWrite = opacity > 0.8; 
                      }
                      obj.visible = opacity > 0.05;
-                } else if(!isFluid && !isParticle) {
+                } else if(!isParticle) {
                      const mat = (obj as THREE.Mesh).material as THREE.MeshStandardMaterial;
                      if(mat) { mat.opacity = 1; mat.transparent = false; }
                      obj.visible = true;
@@ -560,23 +568,16 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
       
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, cameraRef.current!);
-      // Intersect with gizmo arrows (recursive true)
       const intersects = raycaster.intersectObjects(gizmoGroupRef.current!.children, true);
 
       if (intersects.length > 0) {
-            // Traverse up to find userData
             let obj = intersects[0].object;
-            
-            // Check for Center Sphere (Mode Switcher)
             if (obj.userData.isGizmoCenter) {
                 setTransformMode(prev => prev === 'TRANSLATE' ? 'SCALE' : 'TRANSLATE');
-                return; // Mode switch handled, don't drag
+                return; 
             }
-
-            // Check if object or parent has axis data
             let axis: string | null = obj.userData.axis;
             if(!axis && obj.parent) axis = obj.parent.userData.axis;
-
             if (axis) {
                 if(controlsRef.current) controlsRef.current.enabled = false;
                 setDragAxis(axis.toUpperCase() as Axis);
@@ -595,34 +596,43 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
       const isScale = transformModeRef.current === 'SCALE';
 
       if(entity) {
+          // Create new object for immutability during update
+          const newEntity = { ...entity, transform: { ...entity.transform, position: [...entity.transform.position] as any, scale: [...entity.transform.scale] as any } };
+          
           if (dragAxisRef.current === 'X') {
-              if (isScale) entity.transform.scale[0] += deltaX * moveSpeed;
-              else entity.transform.position[0] += deltaX * moveSpeed;
+              if (isScale) newEntity.transform.scale[0] += deltaX * moveSpeed;
+              else newEntity.transform.position[0] += deltaX * moveSpeed;
           }
           if (dragAxisRef.current === 'Y') {
-              if (isScale) entity.transform.scale[1] -= deltaY * moveSpeed;
-              else entity.transform.position[1] -= deltaY * moveSpeed;
+              if (isScale) newEntity.transform.scale[1] -= deltaY * moveSpeed;
+              else newEntity.transform.position[1] -= deltaY * moveSpeed;
           }
           if (dragAxisRef.current === 'Z') {
-              if (isScale) entity.transform.scale[2] += deltaX * moveSpeed;
-              else entity.transform.position[2] += deltaX * moveSpeed;
+              if (isScale) newEntity.transform.scale[2] += deltaX * moveSpeed;
+              else newEntity.transform.position[2] += deltaX * moveSpeed;
           }
           if (dragAxisRef.current === 'W') {
               if (isScale) {
-                  if(entity.transform.scale[3] === undefined) entity.transform.scale[3] = 1;
-                  entity.transform.scale[3] -= deltaY * moveSpeed;
+                  if(newEntity.transform.scale[3] === undefined) newEntity.transform.scale[3] = 1;
+                  newEntity.transform.scale[3] -= deltaY * moveSpeed;
               } else {
-                  if(entity.transform.position[3] === undefined) entity.transform.position[3] = 0;
-                  entity.transform.position[3] += deltaY * moveSpeed;
+                  if(newEntity.transform.position[3] === undefined) newEntity.transform.position[3] = 0;
+                  newEntity.transform.position[3] += deltaY * moveSpeed;
               }
           }
+          
           setDragStartPos({ x: e.clientX, y: e.clientY });
-          setEntities([...entities]); 
+          // Live update, no commit to history yet
+          const updatedEntities = entities.map(e => e.id === newEntity.id ? newEntity : e);
+          onEntitiesChange(updatedEntities, false);
       }
   };
 
   const handleGlobalMouseUp = () => {
       if (dragAxisRef.current !== 'NONE') {
+          // Commit the final state to history
+          onEntitiesChange(entitiesRef.current, true);
+
           setDragAxis('NONE');
           if(controlsRef.current) controlsRef.current.enabled = true;
       }
@@ -642,11 +652,12 @@ const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, dimension, is
           const target = new THREE.Vector3();
           raycaster.ray.intersectPlane(plane, target);
           if (target) {
-             setEntities(prev => prev.map(ent => 
+             const updated = entities.map(ent => 
                  ent.id === hierarchyId 
-                 ? { ...ent, transform: { ...ent.transform, position: [target.x, target.y + 1, target.z, ent.transform.position[3]] } }
+                 ? { ...ent, transform: { ...ent.transform, position: [target.x, target.y + 1, target.z, ent.transform.position[3]] as any } }
                  : ent
-             ));
+             );
+             onEntitiesChange(updated, true);
           }
       }
   };

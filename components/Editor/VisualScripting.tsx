@@ -10,8 +10,11 @@ const NODE_LIBRARY = [
   { type: 'EVENT', category: 'Events', title: 'On Update', color: 'bg-[#ff5e3a]', pins: { input: [], output: ['Exec', 'DeltaTime'] } },
   { type: 'EVENT', category: 'Events', title: 'On Collision', color: 'bg-[#ff5e3a]', pins: { input: [], output: ['Exec', 'OtherActor'] } },
   { type: 'EVENT', category: 'Events', title: 'On Trigger Enter', color: 'bg-[#ff5e3a]', pins: { input: [], output: ['Exec', 'OtherActor'] } },
+  { type: 'EVENT', category: 'Events', title: 'On Trigger Exit', color: 'bg-[#ff5e3a]', pins: { input: [], output: ['Exec', 'OtherActor'] } },
   { type: 'EVENT', category: 'Events', title: 'On Destroy', color: 'bg-[#ff5e3a]', pins: { input: [], output: ['Exec'] } },
   { type: 'EVENT', category: 'Interaction', title: 'On Interact', color: 'bg-orange-500', pins: { input: [], output: ['Exec', 'Interactor'] } },
+  { type: 'EVENT', category: 'Input', title: 'On Key Press', color: 'bg-red-500', pins: { input: ['Key'], output: ['Exec'] } },
+  { type: 'EVENT', category: 'Input', title: 'On Key Release', color: 'bg-red-500', pins: { input: ['Key'], output: ['Exec'] } },
   
   // Logic
   { type: 'LOGIC', category: 'Logic', title: 'Branch', color: 'bg-indigo-600', pins: { input: ['Exec', 'Condition'], output: ['True', 'False'] } },
@@ -25,6 +28,8 @@ const NODE_LIBRARY = [
   { type: 'LOGIC', category: 'Logic', title: 'OR', color: 'bg-indigo-600', pins: { input: ['A', 'B'], output: ['Result'] } },
   { type: 'LOGIC', category: 'Logic', title: 'Flip Flop', color: 'bg-indigo-600', pins: { input: ['Exec'], output: ['A', 'B'] } },
   { type: 'LOGIC', category: 'Logic', title: 'Do N', color: 'bg-indigo-600', pins: { input: ['Exec', 'N', 'Reset'], output: ['Exit'] } },
+  { type: 'LOGIC', category: 'Logic', title: 'For Loop', color: 'bg-indigo-600', pins: { input: ['Exec', 'Start', 'End'], output: ['Loop', 'Completed', 'Index'] } },
+  { type: 'LOGIC', category: 'Logic', title: 'While Loop', color: 'bg-indigo-600', pins: { input: ['Exec', 'Condition'], output: ['Loop', 'Completed'] } },
   
   // Inputs (Interactive)
   { type: 'INPUT_NUM', category: 'Input', title: 'Number', color: 'bg-gray-700', pins: { input: [], output: ['Value'] } },
@@ -38,12 +43,14 @@ const NODE_LIBRARY = [
   { type: 'VAR', category: 'Variables', title: 'Set Variable', color: 'bg-pink-600', pins: { input: ['Exec', 'Name', 'Value'], output: ['Then'] } },
   { type: 'VAR', category: 'Variables', title: 'Random Float', color: 'bg-pink-600', pins: { input: ['Min', 'Max'], output: ['Result'] } },
   { type: 'VAR', category: 'Variables', title: 'Random Bool', color: 'bg-pink-600', pins: { input: [], output: ['Result'] } },
+  { type: 'VAR', category: 'Variables', title: 'String', color: 'bg-pink-600', pins: { input: [], output: ['Value'] } },
 
   // Level Management
   { type: 'LEVEL', category: 'Game', title: 'Load Level', color: 'bg-purple-600', pins: { input: ['Exec', 'LevelName'], output: ['Then'] } },
   { type: 'LEVEL', category: 'Game', title: 'Get Current Level', color: 'bg-purple-600', pins: { input: [], output: ['Name'] } },
   { type: 'LEVEL', category: 'Game', title: 'Spawn Entity', color: 'bg-purple-600', pins: { input: ['Exec', 'Class', 'Transform'], output: ['Then', 'Entity'] } },
   { type: 'LEVEL', category: 'Game', title: 'Destroy Entity', color: 'bg-purple-600', pins: { input: ['Exec', 'Entity'], output: ['Then'] } },
+  { type: 'LEVEL', category: 'Game', title: 'Get Player', color: 'bg-purple-600', pins: { input: [], output: ['Entity'] } },
 
   // Math
   { type: 'MATH', category: 'Math', title: 'Add', color: 'bg-emerald-600', pins: { input: ['A', 'B'], output: ['Result'] } },
@@ -66,33 +73,39 @@ const NODE_LIBRARY = [
   { type: 'MATH_VEC', category: 'Vector', title: 'Cross Product', color: 'bg-teal-600', pins: { input: ['A', 'B'], output: ['Result'] } },
   { type: 'MATH_VEC', category: 'Vector', title: 'Normalize', color: 'bg-teal-600', pins: { input: ['In'], output: ['Result'] } },
   { type: 'MATH_VEC', category: 'Vector', title: 'Distance', color: 'bg-teal-600', pins: { input: ['A', 'B'], output: ['Result'] } },
+  { type: 'MATH_VEC', category: 'Vector', title: 'Look At', color: 'bg-teal-600', pins: { input: ['From', 'To'], output: ['Rotation'] } },
   
   // Physics
   { type: 'FLINT', category: 'Physics', title: 'Add Force', color: 'bg-amber-600', pins: { input: ['Exec', 'Vector', 'Local'], output: ['Then'] } },
+  { type: 'FLINT', category: 'Physics', title: 'Add Torque', color: 'bg-amber-600', pins: { input: ['Exec', 'Vector'], output: ['Then'] } },
   { type: 'FLINT', category: 'Physics', title: 'Apply Impulse', color: 'bg-amber-600', pins: { input: ['Exec', 'Vector'], output: ['Then'] } },
   { type: 'FLINT', category: 'Physics', title: 'Set Velocity', color: 'bg-amber-600', pins: { input: ['Exec', 'Vector'], output: ['Then'] } },
   { type: 'FLINT', category: 'Physics', title: 'Get Velocity', color: 'bg-amber-600', pins: { input: ['Entity'], output: ['Vector'] } },
   { type: 'FLINT', category: 'Physics', title: 'Raycast', color: 'bg-amber-600', pins: { input: ['Exec', 'Start', 'Dir', 'Dist'], output: ['Hit', 'Entity', 'Pos'] } },
+  { type: 'FLINT', category: 'Physics', title: 'Sphere Cast', color: 'bg-amber-600', pins: { input: ['Exec', 'Start', 'Dir', 'Radius'], output: ['Hit', 'Entity'] } },
 
   // Time
   { type: 'TIME', category: 'Time', title: 'Get Time', color: 'bg-cyan-600', pins: { input: [], output: ['Seconds'] } },
+  { type: 'TIME', category: 'Time', title: 'Get Delta Time', color: 'bg-cyan-600', pins: { input: [], output: ['Seconds'] } },
   { type: 'TIME', category: 'Time', title: 'Time Scale', color: 'bg-cyan-600', pins: { input: ['Exec', 'Scale'], output: ['Then'] } },
   
   // Audio
   { type: 'AUDIO', category: 'Audio', title: 'Play Sound', color: 'bg-rose-500', pins: { input: ['Exec', 'Clip', 'Pos'], output: ['Then'] } },
   { type: 'AUDIO', category: 'Audio', title: 'Stop Sound', color: 'bg-rose-500', pins: { input: ['Exec', 'SoundID'], output: ['Then'] } },
+  { type: 'AUDIO', category: 'Audio', title: 'Set Volume', color: 'bg-rose-500', pins: { input: ['Exec', 'Level'], output: ['Then'] } },
 
   // GUI
   { type: 'GUI', category: 'User Interface', title: 'Create Canvas', color: 'bg-blue-500', pins: { input: ['Exec', 'ID'], output: ['Then'] } },
   { type: 'GUI', category: 'User Interface', title: 'Add Button', color: 'bg-blue-500', pins: { input: ['Exec', 'CanvasID', 'Text', 'Pos'], output: ['Then', 'OnClicked'] } },
   { type: 'GUI', category: 'User Interface', title: 'Add Text', color: 'bg-blue-500', pins: { input: ['Exec', 'CanvasID', 'Text', 'Pos'], output: ['Then'] } },
   { type: 'GUI', category: 'User Interface', title: 'Show/Hide Mouse', color: 'bg-blue-500', pins: { input: ['Exec', 'Visible'], output: ['Then'] } },
+  { type: 'GUI', category: 'User Interface', title: 'Set Cursor', color: 'bg-blue-500', pins: { input: ['Exec', 'IconName'], output: ['Then'] } },
 ];
 
 const VisualScripting: React.FC = () => {
   const [nodes, setNodes] = useState<NodeData[]>([
     { id: 'n1', ...NODE_LIBRARY[0], pos: { x: 100, y: 100 } },
-    { id: 'n2', ...NODE_LIBRARY[10], pos: { x: 400, y: 100 } }, // Number input
+    { id: 'n2', ...NODE_LIBRARY[10], pos: { x: 400, y: 100 } }, 
   ]);
   const [connections, setConnections] = useState<Connection[]>([]);
 
@@ -109,23 +122,33 @@ const VisualScripting: React.FC = () => {
     setHistoryIdx(newHistory.length - 1);
   }, [history, historyIdx]);
 
-  const undo = () => {
+  const undo = useCallback(() => {
     if (historyIdx > 0) {
       const prev = history[historyIdx - 1];
       setNodes(prev.nodes);
       setConnections(prev.connections);
       setHistoryIdx(historyIdx - 1);
     }
-  };
+  }, [history, historyIdx]);
 
-  const redo = () => {
+  const redo = useCallback(() => {
     if (historyIdx < history.length - 1) {
       const next = history[historyIdx + 1];
       setNodes(next.nodes);
       setConnections(next.connections);
       setHistoryIdx(historyIdx + 1);
     }
-  };
+  }, [history, historyIdx]);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+          if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
 
   const [dragStart, setDragStart] = useState<{ x: number, y: number, nodeId: string, pinName: string, type: 'in' | 'out' } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -285,7 +308,7 @@ const VisualScripting: React.FC = () => {
         {/* Header Toolbar */}
         <div className="h-12 border-b border-white/5 bg-black/40 flex items-center px-6 z-10 justify-between backdrop-blur-md">
             <div className="flex items-center gap-6">
-            <span className="text-[10px] font-black uppercase text-[#ff9d5c] tracking-[0.2em]">Visual Blueprint</span>
+            <span className="text-[10px] font-black uppercase text-[#ff9d5c] tracking-[0.2em]">Visual Blueprint v0.7.5</span>
             <div className="flex bg-black/40 p-1 rounded-lg border border-white/5">
                 <button disabled={historyIdx === 0} onClick={undo} className={`px-3 py-1 rounded text-[9px] font-black uppercase transition-all ${historyIdx === 0 ? 'opacity-20' : 'hover:bg-white/5 text-[#ff5e3a]'}`}>Undo</button>
                 <button disabled={historyIdx === history.length - 1} onClick={redo} className={`px-3 py-1 rounded text-[9px] font-black uppercase transition-all ${historyIdx === history.length - 1 ? 'opacity-20' : 'hover:bg-white/5 text-[#ff5e3a]'}`}>Redo</button>
