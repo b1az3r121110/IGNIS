@@ -1,0 +1,7 @@
+{
+  "name": "Ignis Engine & Creator",
+  "description": "A comprehensive game creation suite featuring 2D/3D/4D rendering, visual scripting, a custom hybrid programming language, and physics simulation, all wrapped in a Firewatch-inspired designer interface.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
